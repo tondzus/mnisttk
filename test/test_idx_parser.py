@@ -122,7 +122,7 @@ def test_ubyte_matrix_encode_file_object_helper(ubyte_matrix):
         assert bytes_buffer.getvalue() == model.read()
 
 
-def test_ubyte_matrix_encode_bytes_helper(request, ubyte_matrix):
+def test_ubyte_matrix_encode_bytes_helper(ubyte_matrix):
     matrix = np.fromiter([1, 2, 3, 4, 5, 6], dtype=np.uint8).reshape((2, 3))
     encoded_data = mnisttk.encode_bytes(matrix)
     # 1x4B magic number 2x4B dimensions 6x1B uint8 values
