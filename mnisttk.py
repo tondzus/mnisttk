@@ -1,8 +1,8 @@
 import struct
+import numpy as np
 from operator import mul
 from functools import reduce
 from collections import namedtuple
-import numpy as np
 
 
 UNSIGNED_BYTE = b'\x08'
