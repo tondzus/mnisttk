@@ -1,10 +1,16 @@
 import math
 import numpy as np
+import random
 
 
 @np.vectorize
 def sigmoid(t):
     return 1 / (1 + math.e ** -t)
+
+
+@np.vectorize
+def sigmoid_prime(t):
+    return t * (1 - t)
 
 
 @np.vectorize
@@ -29,91 +35,77 @@ def normalize(data, minmax=None):
     return minmax, data
 
 
+def shuffle_data(dataset1, *datasets):
+    count = len(dataset1)
+    indexes = np.random.permutation(range(count))
+    return [dataset1[indexes]] + [dataset[indexes] for dataset in datasets]
+
+
 def max_epoch(max_epoch):
-    def max_epoch_stopping_criteria(trainer):
-        return max_epoch <= trainer.epoch
+    def max_epoch_stopping_criteria(train_data):
+        return max_epoch <= train_data.epoch
     return max_epoch_stopping_criteria
 
 
-class MLP:
-    """Multilayer perceptron with hidden layers.
+def cross_validate_data_generator(data, segment_count):
+    """Generates `segment_count` segment tuples consisting of training and
+    validation data.
     """
-    def __init__(self, arch):
+    segment_length = int(len(data) / segment_count)
+    for start in range(0, len(data), segment_length):
+        validation_idx = range(start, start + segment_length)
+        training_idx = [index for index in range(len(data))
+                        if index < start or index >= start + segment_length]
+        yield data[training_idx, :], data[validation_idx, :]
+
+
+class ForwardFeedNetwork:
+    def __init__(self, arch, activation='sigmoid'):
         self.arch = arch
+        if activation == 'sigmoid':
+            self.activate = sigmoid
+            self.activate_prime = sigmoid_prime
+        else:
+            raise ValueError('Unsupported activation function')
+
         rand = np.random.rand
         self.weights, self.biases = [], []
-        for input_dim, neuron_count in zip(arch[:-1], arch[1:]):
-            self.weights.append(rand(input_dim, neuron_count) * 0.1 - 0.05)
-            self.biases.append(rand(neuron_count) * 0.1 - 0.05)
+        for in_dim, n_count in zip(arch[:-1], arch[1:]):
+            self.weights.append(rand(in_dim, n_count) * 0.1 - 0.05)
+            self.biases.append(rand(n_count) * 0.1 - 0.05)
 
-    def forward_feed(self, data, all=False):
-        activations = [data]
-        for w, b in zip(self.weights, self.biases):
-            activations.append(sigmoid(np.dot(activations[-1], w) + b))
-        return activations if all else activations[-1]
+    def forward_feed(self, in_, all_activations=False):
+        activations = [in_]
+        for weight, bias in zip(self.weights, self.biases):
+            activ = np.dot(activations[-1], weight) + bias
+            activations.append(self.activate(activ))
+        return activations if all_activations else activations[-1]
 
+    def classify(self, sample, treshold=0.5):
+        activations = self.forward_feed(sample)
+        return np.array([0.0 if a < treshold else 1.0
+                         for a in activations])
 
-class BackpropagationTeacher:
-    def __init__(self, network_to_train, alpha):
-        self.network = network_to_train
-        self.alpha = alpha
-        self.train_errors = []
-        self._wr = list(reversed(self.network.weights))
-        self._br = list(reversed(self.network.biases))
-
-    @property
-    def epoch(self):
-        return len(self.train_errors)
-
-    def gradient_descent(self, data, stopping_criterion, batch_size=20):
-        """Gradient descent learning algorithm "backed" by backpropagation
-        that assumes sigmoidal activation function, which is used by default
-        in forward_feed method.
-        """
+    def train(self, input_data, target_data, alpha, stopping_criteria):
+        self.epoch = 0
         while True:
-            np.random.shuffle(data)
-            self.train_errors.append(
-                np.mean(self.compute_quadratic_error(data))
-            )
+            self.epoch += 1
+            input_data, target_data = shuffle_data(input_data, target_data)
+            for in_, target in zip(input_data, target_data):
+                self.update(in_, target, alpha)
 
-            for batch in batches(data, batch_size):
-                self.teach_batch(batch)
-
-            if stopping_criterion(trainer=self):
-                self.train_errors.append(
-                    np.mean(self.compute_quadratic_error(data))
-                )
+            if stopping_criteria(self):
                 break
 
-    def teach_batch(self, batch):
-        """Use backpropagation once to update weights and biases in order to
-        decrease error on provided sample.
-        """
-        net = self.network
-        if batch.shape[1] != net.arch[0] + net.arch[-1]:
-            raise ValueError('Batch doesn\'t have correct dimensions')
-        input_data, target = batch[:, :net.arch[0]], batch[:, net.arch[0]:]
+    def update(self, sample, target, alpha):
+        activations = self.forward_feed(sample, all_activations=True)
+        output, other_activ = activations[-1], reversed(activations[1:-1])
+        deltas = [(target - output) * self.activate_prime(output)]
+        for a, w in zip(other_activ, reversed(self.weights[1:])):
+            delta = np.dot(deltas[-1], w.T) * self.activate_prime(a)
+            deltas.append(delta)
+        deltas.reverse()
 
-        activations = net.forward_feed(input_data, all=True)
-        output, *hidden_output = reversed(activations)
-
-        # Compute error for last layer
-        errors = [(output - target) * output * (1 - output)]
-        # Compute error for the rest of layers
-        for w, activ in zip(self._wr, hidden_output):
-            err = np.dot(w, errors[-1].T) * (activ * (1 - activ)).T
-            errors.append(err.T)
-
-        update_data = zip(net.weights, net.biases, reversed(errors[:-1]),
-                          activations[:-1])
-        for weights, biases, err, activ in update_data:
-            biases -= np.mean(self.alpha * err, axis=0)
-            weights -= self.alpha * np.dot(activ.T, err) / activ.shape[0]
-
-    def compute_quadratic_error(self, data):
-        net = self.network
-        if data.shape[1] != net.arch[0] + net.arch[-1]:
-            raise ValueError('Data doesn\'t have correct dimensions')
-        input_data, target = data[:, :net.arch[0]], data[:, net.arch[0]:]
-        output = net.forward_feed(input_data)
-        return quadratic_error(output, target)
+        for w, b, a, d in zip(self.weights, self.biases, activations, deltas):
+            b += alpha * d
+            w += alpha * (np.matrix(a).T * np.matrix(d))

@@ -11,5 +11,5 @@ setup(
     author='Tomas Stibrany',
     author_email='tms.stibrany@gmail.com',
     install_requires=['numpy'],
-    py_modules=['mnisttk'],
+    py_modules=['mnisttk', 'ml'],
 )

@@ -43,6 +43,19 @@ def test_quadratic_error_matrix():
     assert np.all(ml.quadratic_error(output, target) == expected_errors)
 
 
+def test_cross_validate_data_generator():
+    data = np.reshape(range(12), (6, 2))
+    validation_data = list(ml.cross_validate_data_generator(data, 3))
+    assert len(validation_data) == 3
+    first, second, third = validation_data
+    assert np.all(first[0] == [[4, 5], [6, 7], [8, 9], [10, 11]])
+    assert np.all(first[1] == [[0, 1], [2, 3]])
+    assert np.all(second[0] == [[0, 1], [2, 3], [8, 9], [10, 11]])
+    assert np.all(second[1] == [[4, 5], [6, 7]])
+    assert np.all(third[0] == [[0, 1], [2, 3], [4, 5], [6, 7]])
+    assert np.all(third[1] == [[8, 9], [10, 11]])
+
+
 def test_max_epoch_stopping_criteria():
     Trainer = namedtuple('Trainer', ['epoch'])
     stopping_function = ml.max_epoch(10)
@@ -52,42 +65,42 @@ def test_max_epoch_stopping_criteria():
 
 
 def test_mlp_ann_init_weights():
-    ann = ml.MLP((3, 2, 4))
+    ann = ml.ForwardFeedNetwork((3, 2, 4), 'sigmoid')
     assert len(ann.weights) == 2
     assert ann.weights[0].shape == (3, 2)
     assert ann.weights[1].shape == (2, 4)
 
 
 def test_mlp_ann_init_random_weights():
-    ann1 = ml.MLP((3, 2, 4))
-    ann2 = ml.MLP((3, 2, 4))
+    ann1 = ml.ForwardFeedNetwork((3, 2, 4), 'sigmoid')
+    ann2 = ml.ForwardFeedNetwork((3, 2, 4), 'sigmoid')
     for w1, w2 in zip(ann1.weights, ann2.weights):
         assert np.any(w1 != w2)
 
 
 def test_mlp_ann_init_biases():
-    ann = ml.MLP((3, 2, 4))
+    ann = ml.ForwardFeedNetwork((3, 2, 4), 'sigmoid')
     assert len(ann.biases) == 2
     assert ann.biases[0].shape == (2, )
     assert ann.biases[1].shape == (4, )
 
 
 def test_mlp_ann_init_random_biases():
-    ann1 = ml.MLP((3, 2, 4))
-    ann2 = ml.MLP((3, 2, 4))
+    ann1 = ml.ForwardFeedNetwork((3, 2, 4), 'sigmoid')
+    ann2 = ml.ForwardFeedNetwork((3, 2, 4), 'sigmoid')
     for b1, b2 in zip(ann1.biases, ann2.biases):
         assert np.any(b1 != b2)
 
 
 def test_mlp_ann_forward_feed_vector():
-    ann = ml.MLP((3, 2, 4))
+    ann = ml.ForwardFeedNetwork((3, 2, 4))
     output = ann.forward_feed(np.asarray([1, 2, 3]))
     assert output.shape == (4, )
 
 
 def test_mlp_ann_forward_feed_vector_all():
-    ann = ml.MLP((3, 2, 4))
-    activations = ann.forward_feed(np.asarray([1, 2, 3]), all=True)
+    ann = ml.ForwardFeedNetwork((3, 2, 4))
+    activations = ann.forward_feed(np.asarray([1, 2, 3]), all_activations=True)
     assert len(activations) == 3
     assert activations[0].shape == (3, )
     assert np.all(activations[0] == [1, 2, 3])
@@ -96,33 +109,27 @@ def test_mlp_ann_forward_feed_vector_all():
 
 
 def test_mlp_ann_forward_feed_matrix():
-    ann = ml.MLP((3, 2, 4))
+    ann = ml.ForwardFeedNetwork((3, 2, 4))
     input_matrix = np.asarray([1, 2,  3, 4, 5, 6]).reshape((2, 3))
     output = ann.forward_feed(input_matrix)
     assert output.shape == (2, 4)
 
 
 def test_mlp_ann_forward_feed_output_bounds():
-    ann = ml.MLP((3, 2, 4))
+    ann = ml.ForwardFeedNetwork((3, 2, 4))
     input_matrix = np.asarray([-100, -50,  10, 10, 50, 100]).reshape((2, 3))
     output = ann.forward_feed(input_matrix)
     assert np.all(output > 0)
     assert np.all(output < 1)
 
 
-@pytest.mark.parametrize("ann", [
-    ml.MLP((2, 1, 1)),
-    ml.MLP((2, 1, 1)),
-    ml.MLP((2, 1, 1)),
-    ml.MLP((2, 1, 1)),
-    ml.MLP((2, 1, 1)),
-    ml.MLP((2, 1, 1)),
-    ml.MLP((2, 1, 1)),
-    ml.MLP((2, 1, 1)),
-    ml.MLP((2, 1, 1)),
-    ml.MLP((2, 1, 1)),
-])
-def test_mlp_ann_gradient_descent_error_reduction(ann, xor_dataset):
-    trainer = ml.BackpropagationTeacher(ann, alpha=0.01)
-    trainer.gradient_descent(xor_dataset, ml.max_epoch(5))
-    assert trainer.train_errors[-1] < trainer.train_errors[0]
+def test_mlp_ann_update_for_sample_sanity():
+    ann = ml.ForwardFeedNetwork((2, 2, 1))
+    in_, target = np.asarray([1.0, 0.0]), np.asarray([1.0])
+    ann.update(in_, target, 0.2)
+
+
+def test_mlp_ann_train_sanity(xor_dataset):
+    ann = ml.ForwardFeedNetwork((2, 2, 1))
+    ann.train(xor_dataset[:, :2], xor_dataset[:, 2:], 0.2, ml.max_epoch(5))
+    assert ann.epoch == 5
