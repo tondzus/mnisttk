@@ -174,9 +174,9 @@ def estimate_parameters(ann, sample, target, epsilon=0.0001):
         ann = update_ann(ann, plus_p)
         plus_errors = ml.quadratic_error(ann.forward_feed(sample), target)
         plus_cost = np.mean(plus_errors)
-        derivative = (plus_cost - minus_cost) / 2 * epsilon
+        derivative = (plus_cost - minus_cost) / (2 * epsilon)
         updated_parameters.append(derivative)
-    return np.asarray(updated_parameters) * 100000000
+    return np.asarray(updated_parameters)
 
 
 def test_mlp_ann_gradient_estimation_comparison(xor_dataset):
