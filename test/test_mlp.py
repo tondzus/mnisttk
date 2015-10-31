@@ -133,3 +133,62 @@ def test_mlp_ann_train_sanity(xor_dataset):
     ann = ml.ForwardFeedNetwork((2, 2, 1))
     ann.train(xor_dataset[:, :2], xor_dataset[:, 2:], 0.2, ml.max_epoch(5))
     assert ann.epoch == 5
+
+
+def update_ann(ann, parameters):
+    ann = ml.ForwardFeedNetwork(ann.arch, ann.activation)
+    ann.weights, ann.biases = [], []
+    start = 0
+    for input_dim, neuron_count in zip(ann.arch[:-1], ann.arch[1:]):
+        w_count, b_count = input_dim * neuron_count, neuron_count
+        weights = np.asarray(parameters[start:start+w_count])
+        start += w_count
+        biases = np.asarray(parameters[start:start+b_count])
+        start += b_count
+        ann.weights.append(weights.reshape((input_dim, neuron_count)))
+        ann.biases.append(biases)
+    return ann
+
+
+def extract_parameters(ann):
+    parameters = []
+    for weights, biases in zip(ann.weights, ann.biases):
+        parameters.extend(weights.reshape(-1))
+        parameters.extend(biases.reshape(-1))
+    return np.asarray(parameters)
+
+
+def estimate_parameters(ann, sample, target, epsilon=0.0001):
+    original_parameters = extract_parameters(ann)
+    ann = ml.ForwardFeedNetwork(ann.arch, ann.activation)
+
+    updated_parameters = []
+    for index in range(len(original_parameters)):
+        dp = np.zeros(len(original_parameters))
+        dp[index] += epsilon
+        minus_p = original_parameters - dp
+        ann = update_ann(ann, minus_p)
+        minus_errors = ml.quadratic_error(ann.forward_feed(sample), target)
+        minus_cost = np.mean(minus_errors)
+        plus_p = original_parameters + dp
+        ann = update_ann(ann, plus_p)
+        plus_errors = ml.quadratic_error(ann.forward_feed(sample), target)
+        plus_cost = np.mean(plus_errors)
+        derivative = (plus_cost - minus_cost) / 2 * epsilon
+        updated_parameters.append(derivative)
+    return np.asarray(updated_parameters) * 100000000
+
+
+def test_mlp_ann_gradient_estimation_comparison(xor_dataset):
+    ann = ml.ForwardFeedNetwork((2, 2, 1))
+    original_parameters = extract_parameters(ann)
+    sample, target = xor_dataset[3, :2], xor_dataset[3, 2:]
+
+    delta_est = estimate_parameters(ann, sample, target)
+    ann.update(sample, target, 1.0)
+    backpropagation_parameters = extract_parameters(ann)
+
+    delta_bcp = original_parameters - backpropagation_parameters
+    dp = np.abs(delta_bcp - delta_est)
+    assert np.all(dp < 0.00001)
+

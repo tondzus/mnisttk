@@ -1,6 +1,5 @@
 import math
 import numpy as np
-import random
 
 
 @np.vectorize
@@ -62,6 +61,7 @@ def cross_validate_data_generator(data, segment_count):
 class ForwardFeedNetwork:
     def __init__(self, arch, activation='sigmoid'):
         self.arch = arch
+        self.activation = activation
         if activation == 'sigmoid':
             self.activate = sigmoid
             self.activate_prime = sigmoid_prime
@@ -80,11 +80,6 @@ class ForwardFeedNetwork:
             activ = np.dot(activations[-1], weight) + bias
             activations.append(self.activate(activ))
         return activations if all_activations else activations[-1]
-
-    def classify(self, sample, treshold=0.5):
-        activations = self.forward_feed(sample)
-        return np.array([0.0 if a < treshold else 1.0
-                         for a in activations])
 
     def train(self, input_data, target_data, alpha, stopping_criteria):
         self.epoch = 0
