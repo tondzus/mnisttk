@@ -100,10 +100,10 @@ class TestCrossValidation:
 class TestStoppingCriteria:
     def test_max_epoch_stopping_criteria(self):
         Trainer = namedtuple('Trainer', ['epoch'])
-        stopping_function = ml.max_epoch(10)
-        assert not stopping_function(Trainer(5))
+        stopping_function = ml.max_epochs(10)
+        assert not stopping_function(Trainer(9))
         assert stopping_function(Trainer(10))
-        assert stopping_function(Trainer(15))
+        assert stopping_function(Trainer(11))
 
     def test_max_error_stopping_criteria(self):
         Trainer = namedtuple('Trainer', ['epoch', 'train_errors'])
@@ -196,7 +196,7 @@ class TestForwardFeedNetwork:
 
     def test_mlp_ann_train_sanity(self, xor_dataset):
         ann = ml.ForwardFeedNetwork((2, 2, 1))
-        training = ann.train(xor_dataset, 0.2, ml.max_epoch(5))
+        training = ann.train(xor_dataset, 0.2, ml.max_epochs(5))
         assert training.epoch == 5
 
     def test_mlp_ann_gradient_estimation_comparison(self, xor_dataset):

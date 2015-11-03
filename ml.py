@@ -54,7 +54,7 @@ def shuffle_data(dataset1, *datasets):
         return [dataset1[indexes]] + [dataset[indexes] for dataset in datasets]
 
 
-def max_epoch(max_epoch):
+def max_epochs(max_epoch):
     def max_epoch_stopping_criteria(train_data):
         return max_epoch <= train_data.epoch
     return max_epoch_stopping_criteria
@@ -62,9 +62,9 @@ def max_epoch(max_epoch):
 
 def max_error(max_error, min_epoch=None, max_epoch=None):
     def max_error_stopping_criteria(train_data):
-        if min_epoch is not None and train_data.epoch <= min_epoch:
+        if min_epoch is not None and train_data.epoch - 1 <= min_epoch:
             return False
-        if max_epoch is not None and train_data.epoch > max_epoch:
+        if max_epoch is not None and train_data.epoch - 1 > max_epoch:
             return True
         return np.mean(train_data.train_errors[-10:]) < max_error
     return max_error_stopping_criteria
@@ -72,9 +72,9 @@ def max_error(max_error, min_epoch=None, max_epoch=None):
 
 def train_error_change(error_delta, min_epoch=None, max_epoch=None):
     def error_change_stopping_criteria(train_data):
-        if min_epoch is not None and train_data.epoch <= min_epoch:
+        if min_epoch is not None and train_data.epoch - 1 <= min_epoch:
             return False
-        if max_epoch is not None and train_data.epoch > max_epoch:
+        if max_epoch is not None and train_data.epoch - 1 > max_epoch:
             return True
         trn_errs = train_data.train_errors
         error_deltas = [p - n for p, n in zip(trn_errs[:-1], trn_errs[1:])]
@@ -85,6 +85,9 @@ def train_error_change(error_delta, min_epoch=None, max_epoch=None):
 def cross_validate_data_generator(data, segment_count):
     """Generates `segment_count` segment tuples consisting of training and
     validation data.
+    :param data: numpy matrix where row represents sample vectors
+    :param segment_count: how many training/validation pairs should be
+    generated
     """
     segment_length = int(len(data) / segment_count)
     for start in range(0, len(data), segment_length):
@@ -129,13 +132,16 @@ class ForwardFeedNetwork:
         errors = quadratic_error(output, target_data)
         return np.sum(errors)
 
-    def train(self, data, alpha, stopping_criteria):
+    def train(self, data, alpha, stopping_criteria, validation=None):
         training = Training(alpha)
         while True:
             data = shuffle_data(data)
-            training.train_errors.append(self.cost(data))
             for vector in data:
                 self.update(vector, alpha)
+
+            training.train_errors.append(self.cost(data))
+            if validation is not None:
+                training.valid_errors.append(self.cost(validation))
 
             if stopping_criteria(training):
                 break
