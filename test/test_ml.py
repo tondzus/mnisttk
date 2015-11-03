@@ -96,6 +96,22 @@ class TestCrossValidation:
         assert np.all(third[0] == [[0, 1], [2, 3], [4, 5], [6, 7]])
         assert np.all(third[1] == [[8, 9], [10, 11]])
 
+    def test_cross_validator_init_model(self):
+        validator = ml.CrossValidator(ml.ForwardFeedNetwork, (2, 2, 1))
+        model = validator.create_model()
+        assert len(model.weights) == 2
+        assert len(model.biases) == 2
+
+    def test_cross_validator_train_model(self, and_dataset):
+        validator = ml.CrossValidator(ml.ForwardFeedNetwork, (2, 1))
+        ann = ml.ForwardFeedNetwork((2, 1))
+        error_before = ann.cost(and_dataset)
+        max_epoch = ml.max_epochs(20)
+        validator.train(ann, and_dataset, and_dataset, (0.1, max_epoch))
+        error_after = ann.cost(and_dataset)
+        assert error_after < error_before
+
+
 
 class TestStoppingCriteria:
     def test_max_epoch_stopping_criteria(self):
@@ -196,7 +212,7 @@ class TestForwardFeedNetwork:
 
     def test_mlp_ann_train_sanity(self, xor_dataset):
         ann = ml.ForwardFeedNetwork((2, 2, 1))
-        training = ann.train(xor_dataset, 0.2, ml.max_epochs(5))
+        training = ann.train(xor_dataset, None, 0.2, ml.max_epochs(5))
         assert training.epoch == 5
 
     def test_mlp_ann_gradient_estimation_comparison(self, xor_dataset):

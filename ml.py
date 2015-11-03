@@ -1,3 +1,4 @@
+import sys
 import math
 import numpy as np
 
@@ -97,6 +98,31 @@ def cross_validate_data_generator(data, segment_count):
         yield data[training_idx, :], data[validation_idx, :]
 
 
+class CrossValidator:
+    def __init__(self, algorithm, *init_args, **init_kwargs):
+        self.alg = algorithm
+        self.args, self.kwargs = init_args, init_kwargs
+
+    def run(self, data, k, *args, **kwargs):
+        data = shuffle_data(data)
+        best_model = (sys.float_info.max, None)
+        for train, validation in cross_validate_data_generator(data, k):
+            model = self.create_model()
+            error = self.train(model, train, validation, args, kwargs)
+            if error < best_model[0]:
+                best_model = error, model
+
+        return best_model[1]
+
+    def create_model(self):
+        return self.alg(*self.args, **self.kwargs)
+
+    def train(self, model, train, validation,
+              model_args=tuple(), model_kwargs={}):
+        model.train(train, validation, *model_args, **model_kwargs)
+        return model.cost(validation)
+
+
 class ForwardFeedNetwork:
     def __init__(self, arch, activation='sigmoid'):
         self.arch = arch
@@ -132,7 +158,7 @@ class ForwardFeedNetwork:
         errors = quadratic_error(output, target_data)
         return np.sum(errors)
 
-    def train(self, data, alpha, stopping_criteria, validation=None):
+    def train(self, data, validation, alpha, stopping_criteria):
         training = Training(alpha)
         while True:
             data = shuffle_data(data)
