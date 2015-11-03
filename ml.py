@@ -2,6 +2,17 @@ import math
 import numpy as np
 
 
+class Training:
+    def __init__(self, alpha):
+        self.alpha = alpha
+        self.train_errors = []
+        self.valid_errors = []
+
+    @property
+    def epoch(self):
+        return len(self.train_errors)
+
+
 @np.vectorize
 def sigmoid(t):
     return 1 / (1 + math.e ** -t)
@@ -37,13 +48,38 @@ def normalize(data, minmax=None):
 def shuffle_data(dataset1, *datasets):
     count = len(dataset1)
     indexes = np.random.permutation(range(count))
-    return [dataset1[indexes]] + [dataset[indexes] for dataset in datasets]
+    if len(datasets) == 0:
+        return dataset1[indexes]
+    else:
+        return [dataset1[indexes]] + [dataset[indexes] for dataset in datasets]
 
 
 def max_epoch(max_epoch):
     def max_epoch_stopping_criteria(train_data):
         return max_epoch <= train_data.epoch
     return max_epoch_stopping_criteria
+
+
+def max_error(max_error, min_epoch=None, max_epoch=None):
+    def max_error_stopping_criteria(train_data):
+        if min_epoch is not None and train_data.epoch <= min_epoch:
+            return False
+        if max_epoch is not None and train_data.epoch > max_epoch:
+            return True
+        return np.mean(train_data.train_errors[-10:]) < max_error
+    return max_error_stopping_criteria
+
+
+def train_error_change(error_delta, min_epoch=None, max_epoch=None):
+    def error_change_stopping_criteria(train_data):
+        if min_epoch is not None and train_data.epoch <= min_epoch:
+            return False
+        if max_epoch is not None and train_data.epoch > max_epoch:
+            return True
+        trn_errs = train_data.train_errors
+        error_deltas = [p - n for p, n in zip(trn_errs[:-1], trn_errs[1:])]
+        return np.sum(error_deltas[-100:]) < error_delta
+    return error_change_stopping_criteria
 
 
 def cross_validate_data_generator(data, segment_count):
@@ -74,6 +110,12 @@ class ForwardFeedNetwork:
             self.weights.append(rand(in_dim, n_count) * 0.1 - 0.05)
             self.biases.append(rand(n_count) * 0.1 - 0.05)
 
+    def split(self, data):
+        if len(data.shape) == 1:
+            return data[:self.arch[0]], data[-self.arch[-1]:]
+        else:
+            return data[:, :self.arch[0]], data[:, -self.arch[-1]:]
+
     def forward_feed(self, in_, all_activations=False):
         activations = [in_]
         for weight, bias in zip(self.weights, self.biases):
@@ -81,18 +123,26 @@ class ForwardFeedNetwork:
             activations.append(self.activate(activ))
         return activations if all_activations else activations[-1]
 
-    def train(self, input_data, target_data, alpha, stopping_criteria):
-        self.epoch = 0
+    def cost(self, data):
+        input_data, target_data = self.split(data)
+        output = self.forward_feed(input_data)
+        errors = quadratic_error(output, target_data)
+        return np.sum(errors)
+
+    def train(self, data, alpha, stopping_criteria):
+        training = Training(alpha)
         while True:
-            self.epoch += 1
-            input_data, target_data = shuffle_data(input_data, target_data)
-            for in_, target in zip(input_data, target_data):
-                self.update(in_, target, alpha)
+            data = shuffle_data(data)
+            training.train_errors.append(self.cost(data))
+            for vector in data:
+                self.update(vector, alpha)
 
-            if stopping_criteria(self):
+            if stopping_criteria(training):
                 break
+        return training
 
-    def update(self, sample, target, alpha):
+    def update(self, vector, alpha):
+        sample, target = vector[:self.arch[0]], vector[-self.arch[-1]:]
         activations = self.forward_feed(sample, all_activations=True)
         output, other_activ = activations[-1], reversed(activations[1:-1])
         deltas = [(target - output) * self.activate_prime(output)]

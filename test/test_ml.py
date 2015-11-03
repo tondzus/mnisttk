@@ -101,9 +101,26 @@ class TestStoppingCriteria:
     def test_max_epoch_stopping_criteria(self):
         Trainer = namedtuple('Trainer', ['epoch'])
         stopping_function = ml.max_epoch(10)
-        assert stopping_function(Trainer(5)) is False
-        assert stopping_function(Trainer(10)) is True
-        assert stopping_function(Trainer(15)) is True
+        assert not stopping_function(Trainer(5))
+        assert stopping_function(Trainer(10))
+        assert stopping_function(Trainer(15))
+
+    def test_max_error_stopping_criteria(self):
+        Trainer = namedtuple('Trainer', ['epoch', 'train_errors'])
+        errors_fail = [0.5, 0.4, 0.3, 0.2, 0.1]
+        errors_pass = [0.1, 0.1, 0.1, 0.1, 0.05]
+        stopping_function = ml.max_error(0.1, max_epoch=10)
+        assert not stopping_function(Trainer(5, errors_fail))
+        assert stopping_function(Trainer(5, errors_pass))
+
+    def test_error_change_stopping_criteria(self):
+        Trainer = namedtuple('Trainer', ['epoch', 'train_errors'])
+        errors_fail = [0.5, 0.4, 0.3, 0.2, 0.1]
+        errors_pass = [0.1, 0.1, 0.1, 0.1, 0.09]
+        stopping_function = ml.train_error_change(0.02, min_epoch=10)
+        assert not stopping_function(Trainer(4, []))
+        assert not stopping_function(Trainer(15, errors_fail))
+        assert stopping_function(Trainer(15, errors_pass))
 
 
 class TestForwardFeedNetwork:
@@ -130,6 +147,20 @@ class TestForwardFeedNetwork:
         ann2 = ml.ForwardFeedNetwork((3, 2, 4), 'sigmoid')
         for b1, b2 in zip(ann1.biases, ann2.biases):
             assert np.any(b1 != b2)
+
+    def test_mlp_ann_split_vector(self):
+        ann = ml.ForwardFeedNetwork((2, 1))
+        vector = np.asarray([0.0, 1.0, 2.0])
+        split = ann.split(vector)
+        assert np.all(split[0] == [0.0, 1.0])
+        assert np.all(split[1] == [2.0])
+
+    def test_mlp_ann_split_matrix(self):
+        ann = ml.ForwardFeedNetwork((2, 1))
+        matrix = np.asarray([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]])
+        split = ann.split(matrix)
+        assert np.all(split[0] == [[0.0, 1.0], [3.0, 4.0]])
+        assert np.all(split[1] == [[2.0], [5.0]])
 
     def test_mlp_ann_forward_feed_vector(self):
         ann = ml.ForwardFeedNetwork((3, 2, 4))
@@ -160,13 +191,13 @@ class TestForwardFeedNetwork:
 
     def test_mlp_ann_update_for_sample_sanity(self):
         ann = ml.ForwardFeedNetwork((2, 2, 1))
-        in_, target = np.asarray([1.0, 0.0]), np.asarray([1.0])
-        ann.update(in_, target, 0.2)
+        vector = np.asarray([1.0, 0.0, 1.0])
+        ann.update(vector, 0.2)
 
     def test_mlp_ann_train_sanity(self, xor_dataset):
         ann = ml.ForwardFeedNetwork((2, 2, 1))
-        ann.train(xor_dataset[:, :2], xor_dataset[:, 2:], 0.2, ml.max_epoch(5))
-        assert ann.epoch == 5
+        training = ann.train(xor_dataset, 0.2, ml.max_epoch(5))
+        assert training.epoch == 5
 
     def test_mlp_ann_gradient_estimation_comparison(self, xor_dataset):
         ann = ml.ForwardFeedNetwork((2, 2, 1))
@@ -174,7 +205,7 @@ class TestForwardFeedNetwork:
         sample, target = xor_dataset[3, :2], xor_dataset[3, 2:]
 
         delta_est = estimate_parameters(ann, sample, target)
-        ann.update(sample, target, 1.0)
+        ann.update(xor_dataset[3], 1.0)
         backpropagation_parameters = extract_parameters(ann)
 
         delta_bcp = original_parameters - backpropagation_parameters
