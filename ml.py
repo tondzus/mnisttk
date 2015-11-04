@@ -1,6 +1,7 @@
 import sys
 import math
 import numpy as np
+import logging
 
 
 class Training:
@@ -104,15 +105,14 @@ class CrossValidator:
         self.args, self.kwargs = init_args, init_kwargs
 
     def run(self, data, k, *args, **kwargs):
-        data = shuffle_data(data)
-        best_model = (sys.float_info.max, None)
-        for train, validation in cross_validate_data_generator(data, k):
+        log = logging.getLogger(__name__)
+        data, models = shuffle_data(data), []
+        for index, (train, validation) in enumerate(cross_validate_data_generator(data, k)):
             model = self.create_model()
             error = self.train(model, train, validation, args, kwargs)
-            if error < best_model[0]:
-                best_model = error, model
-
-        return best_model[1]
+            models.append((error, model))
+            log.info('Finished training {}/{} models', index + 1, k)
+        return models
 
     def create_model(self):
         return self.alg(*self.args, **self.kwargs)
@@ -156,18 +156,26 @@ class ForwardFeedNetwork:
         input_data, target_data = self.split(data)
         output = self.forward_feed(input_data)
         errors = quadratic_error(output, target_data)
-        return np.sum(errors)
+        # return np.sum(np.mean(errors, axis=0))
+        return np.mean(errors)
 
     def train(self, data, validation, alpha, stopping_criteria):
+        log = logging.getLogger(__name__)
+        log.info('Training started!')
         training = Training(alpha)
         while True:
             data = shuffle_data(data)
             for vector in data:
                 self.update(vector, alpha)
 
-            training.train_errors.append(self.cost(data))
+            trn_err = self.cost(data)
+            training.train_errors.append(trn_err)
+            msg = '{}. epoch: training - {}'.format(training.epoch, trn_err)
             if validation is not None:
-                training.valid_errors.append(self.cost(validation))
+                vld_err = self.cost(validation)
+                training.valid_errors.append(vld_err)
+                msg += ', validation - {}'.format(vld_err)
+            log.info(msg)
 
             if stopping_criteria(training):
                 break
@@ -186,3 +194,8 @@ class ForwardFeedNetwork:
         for w, b, a, d in zip(self.weights, self.biases, activations, deltas):
             b += alpha * d
             w += alpha * (np.matrix(a).T * np.matrix(d))
+
+    def classification_test(self, data):
+        outputs = np.argmax(self.forward_feed(data[:, :self.arch[0]]), axis=1)
+        targets = np.argmax(data[:, -self.arch[-1]:], axis=1)
+        return np.sum(targets - outputs == 0), len(outputs)
