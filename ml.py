@@ -127,17 +127,19 @@ class ForwardFeedNetwork:
     def __init__(self, arch, activation='sigmoid'):
         self.arch = arch
         self.activation = activation
-        if activation == 'sigmoid':
-            self.activate = sigmoid
-            self.activate_prime = sigmoid_prime
-        else:
-            raise ValueError('Unsupported activation function')
-
+        self._set_activation()
         rand = np.random.rand
         self.weights, self.biases = [], []
         for in_dim, n_count in zip(arch[:-1], arch[1:]):
             self.weights.append(rand(in_dim, n_count) * 0.1 - 0.05)
             self.biases.append(rand(n_count) * 0.1 - 0.05)
+
+    def _set_activation(self):
+        if self.activation == 'sigmoid':
+            self.activate = sigmoid
+            self.activate_prime = sigmoid_prime
+        else:
+            raise ValueError('Unsupported activation function')
 
     def split(self, data):
         if len(data.shape) == 1:
@@ -199,3 +201,13 @@ class ForwardFeedNetwork:
         outputs = np.argmax(self.forward_feed(data[:, :self.arch[0]]), axis=1)
         targets = np.argmax(data[:, -self.arch[-1]:], axis=1)
         return np.sum(targets - outputs == 0), len(outputs)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['activate']
+        del state['activate_prime']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._set_activation()

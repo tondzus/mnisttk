@@ -1,5 +1,7 @@
+import os
 import ml
 import numpy as np
+import pickle
 from collections import namedtuple
 
 
@@ -228,3 +230,18 @@ class TestForwardFeedNetwork:
         dp = np.abs(delta_bcp - delta_est)
         assert np.all(dp < 0.00001)
 
+    def test_mlp_ann_is_pickle_compatible(self, request):
+        ann1 = ml.ForwardFeedNetwork((2, 3, 1))
+        with open('pickle_test', 'wb') as fp:
+            def fin():
+                os.remove('pickle_test')
+            request.addfinalizer(fin)
+            pickle.dump(ann1, fp)
+        with open('pickle_test', 'rb') as fp:
+            ann2 = pickle.load(fp)
+
+        assert len(ann1.weights) == len(ann2.weights)
+        assert len(ann1.biases) == len(ann2.biases)
+        vector = np.asarray([0.0, 1.0])
+        out1, out2 = ann1.forward_feed(vector), ann2.forward_feed(vector)
+        assert np.all(np.abs(out1 - out2) < 0.00001)
