@@ -1,5 +1,6 @@
 import ml
 import numpy as np
+import pickle
 import mnisttk
 import logging
 from os.path import join
@@ -40,8 +41,11 @@ def load_test_data(path):
 logging.basicConfig(level=logging.INFO)
 
 
-ann = ml.ForwardFeedNetwork((28*28, 100, 10))
 data = load_train_data('/home/stderr/.mnist')
+validator = ml.CrossValidator(ml.ForwardFeedNetwork, (28*28, 100, 10))
 
-ann.train(data, None, 0.001, ml.max_epochs(100))
-print(ann.classification_test(load_test_data('/home/stderr/.mnist')))
+try:
+    models = validator.run(data, 5, 0.4, ml.max_epochs(100))
+finally:
+    with open('mnist.ann', 'wb') as fp:
+        pickle.dump(models, fp)

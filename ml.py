@@ -119,13 +119,6 @@ class CrossValidator:
             models.append(result)
         return models
 
-    def run_parallel(self, processes, data, k, *args, **kwargs):
-        self.model_args, self.model_kwargs = args, kwargs
-        data = shuffle_data(data)
-        pool = Pool(processes)
-        return pool.map_async(self.train_model_for,
-                              cross_validate_data_generator(data, k))
-
     def create_model(self):
         return self.alg(*self.args, **self.kwargs)
 
