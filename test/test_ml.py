@@ -109,7 +109,8 @@ class TestCrossValidation:
         ann = ml.ForwardFeedNetwork((2, 1))
         error_before = ann.cost(and_dataset)
         max_epoch = ml.max_epochs(20)
-        validator.train(ann, and_dataset, and_dataset, (0.1, max_epoch))
+        validator.model_args = (0.1, max_epoch)
+        validator.train(ann, and_dataset, and_dataset)
         error_after = ann.cost(and_dataset)
         assert error_after < error_before
 
@@ -242,6 +243,7 @@ class TestForwardFeedNetwork:
 
         assert len(ann1.weights) == len(ann2.weights)
         assert len(ann1.biases) == len(ann2.biases)
+        assert ann1.last_training == ann2.last_training
         vector = np.asarray([0.0, 1.0])
         out1, out2 = ann1.forward_feed(vector), ann2.forward_feed(vector)
         assert np.all(np.abs(out1 - out2) < 0.00001)

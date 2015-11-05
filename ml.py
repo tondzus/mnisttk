@@ -1,7 +1,7 @@
-import sys
 import math
 import numpy as np
 import logging
+from multiprocessing import Pool
 
 
 class Training:
@@ -13,6 +13,12 @@ class Training:
     @property
     def epoch(self):
         return len(self.train_errors)
+
+    def __eq__(self, other):
+        return self.train_errors == other.train_errors
+
+    def __hash__(self):
+        return hash(self.train_errors)
 
 
 @np.vectorize
@@ -103,24 +109,37 @@ class CrossValidator:
     def __init__(self, algorithm, *init_args, **init_kwargs):
         self.alg = algorithm
         self.args, self.kwargs = init_args, init_kwargs
+        self.model_args, self.model_kwargs = tuple(), dict()
 
     def run(self, data, k, *args, **kwargs):
-        log = logging.getLogger(__name__)
+        self.model_args, self.model_kwargs = args, kwargs
         data, models = shuffle_data(data), []
-        for index, (train, validation) in enumerate(cross_validate_data_generator(data, k)):
-            model = self.create_model()
-            error = self.train(model, train, validation, args, kwargs)
-            models.append((error, model))
-            log.info('Finished training {}/{} models', index + 1, k)
+        for train_data in cross_validate_data_generator(data, k):
+            result = self.train_model_for(train_data)
+            models.append(result)
         return models
+
+    def run_parallel(self, processes, data, k, *args, **kwargs):
+        self.model_args, self.model_kwargs = args, kwargs
+        data = shuffle_data(data)
+        pool = Pool(processes)
+        return pool.map_async(self.train_model_for,
+                              cross_validate_data_generator(data, k))
 
     def create_model(self):
         return self.alg(*self.args, **self.kwargs)
 
-    def train(self, model, train, validation,
-              model_args=tuple(), model_kwargs={}):
-        model.train(train, validation, *model_args, **model_kwargs)
+    def train(self, model, train, validation):
+        model.train(train, validation, *self.model_args, **self.model_kwargs)
         return model.cost(validation)
+
+    def train_model_for(self, data):
+        train_data, validation_data = data
+        log = logging.getLogger(__name__)
+        model = self.create_model()
+        error = self.train(model, train_data, validation_data)
+        log.info('Finished training model')
+        return error, model
 
 
 class ForwardFeedNetwork:
@@ -128,6 +147,7 @@ class ForwardFeedNetwork:
         self.arch = arch
         self.activation = activation
         self._set_activation()
+        self.last_training = None
         rand = np.random.rand
         self.weights, self.biases = [], []
         for in_dim, n_count in zip(arch[:-1], arch[1:]):
@@ -164,24 +184,24 @@ class ForwardFeedNetwork:
     def train(self, data, validation, alpha, stopping_criteria):
         log = logging.getLogger(__name__)
         log.info('Training started!')
-        training = Training(alpha)
+        self.last_training = Training(alpha)
         while True:
             data = shuffle_data(data)
             for vector in data:
                 self.update(vector, alpha)
 
             trn_err = self.cost(data)
-            training.train_errors.append(trn_err)
-            msg = '{}. epoch: training - {}'.format(training.epoch, trn_err)
+            self.last_training.train_errors.append(trn_err)
+            msg = '{}. epoch: training - {}'.format(self.last_training.epoch, trn_err)
             if validation is not None:
                 vld_err = self.cost(validation)
-                training.valid_errors.append(vld_err)
+                self.last_training.valid_errors.append(vld_err)
                 msg += ', validation - {}'.format(vld_err)
             log.info(msg)
 
-            if stopping_criteria(training):
+            if stopping_criteria(self.last_training):
                 break
-        return training
+        return self.last_training
 
     def update(self, vector, alpha):
         sample, target = vector[:self.arch[0]], vector[-self.arch[-1]:]
