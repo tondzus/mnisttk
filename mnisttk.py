@@ -94,11 +94,14 @@ class IdxDecoder(_IdxManipulator):
         """Reads and creates matrix data given correct header for them.
         """
         dt, sign, itemsize = self.type_dict[header.data_type]
-        number_count = reduce(mul, header.dimensions)
-        bytes_buffer = byte_buffer[4 + 4 * len(header.dimensions):]
-        fmt = '>' + sign * number_count
-        matrix = np.asarray(struct.unpack(fmt, bytes_buffer), dtype=dt)
-        return matrix.reshape(header.dimensions)
+        offset = 4 + 4 * len(header.dimensions)
+        # number_count = reduce(mul, header.dimensions)
+        # bytes_buffer = byte_buffer[4 + 4 * len(header.dimensions):]
+        # fmt = '>' + sign * number_count
+        # matrix = np.asarray(struct.unpack(fmt, bytes_buffer), dtype=dt)
+        # return matrix.reshape(header.dimensions)
+        matrix = np.frombuffer(byte_buffer, dtype=dt, offset=offset)
+        return matrix.reshape(header.dimensions).newbyteorder('>')
 
     def read_matrix(self, byte_buffer):
         """Reads next matrix from idx encoded file.
@@ -131,3 +134,11 @@ class IdxEncoder(_IdxManipulator):
         header = self._write_matrix_header(matrix)
         data = self._write_matrix_data(matrix)
         return header + data
+
+
+def displace(image, dx, dy):
+    inimg = image.reshape((28, 28))
+    output = np.zeros(28*28, dtype=np.float32)
+    outimg = output.reshape((28, 28))
+
+    return output
