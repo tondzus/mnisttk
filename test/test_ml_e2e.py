@@ -16,8 +16,8 @@ def test_mlp_ann_train_and_logic_function(and_dataset):
 def test_mlp_ann_train_xor_logic_function(xor_dataset):
     ann = ml.ForwardFeedNetwork((2, 2, 1))
     trainer = ann.train(xor_dataset, None, 0.2,
-                        ml.max_error(0.05, max_epoch=20000))
-    assert trainer.epoch < 20000
+                        ml.max_error(0.005, max_epoch=20000))
+    assert trainer.epoch <= 20000
     results = ann.forward_feed(xor_dataset[:, :2])
     assert results.shape == (4, 1)
     results = results.reshape(4)

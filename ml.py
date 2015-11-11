@@ -70,9 +70,9 @@ def max_epochs(max_epoch):
 
 def max_error(max_error, min_epoch=None, max_epoch=None):
     def max_error_stopping_criteria(train_data):
-        if min_epoch is not None and train_data.epoch - 1 <= min_epoch:
+        if min_epoch is not None and min_epoch > train_data.epoch:
             return False
-        if max_epoch is not None and train_data.epoch - 1 > max_epoch:
+        if max_epoch is not None and max_epoch <= train_data.epoch:
             return True
         return np.mean(train_data.train_errors[-10:]) < max_error
     return max_error_stopping_criteria
@@ -80,9 +80,9 @@ def max_error(max_error, min_epoch=None, max_epoch=None):
 
 def train_error_change(error_delta, min_epoch=None, max_epoch=None):
     def error_change_stopping_criteria(train_data):
-        if min_epoch is not None and train_data.epoch - 1 <= min_epoch:
+        if min_epoch is not None and min_epoch > train_data.epoch:
             return False
-        if max_epoch is not None and train_data.epoch - 1 > max_epoch:
+        if max_epoch is not None and max_epoch <= train_data.epoch:
             return True
         trn_errs = train_data.train_errors
         error_deltas = [p - n for p, n in zip(trn_errs[:-1], trn_errs[1:])]
