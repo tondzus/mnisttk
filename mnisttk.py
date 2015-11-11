@@ -93,13 +93,8 @@ class IdxDecoder(_IdxManipulator):
     def _read_matrix_data(self, header, byte_buffer):
         """Reads and creates matrix data given correct header for them.
         """
-        dt, sign, itemsize = self.type_dict[header.data_type]
+        dt, sign, _ = self.type_dict[header.data_type]
         offset = 4 + 4 * len(header.dimensions)
-        # number_count = reduce(mul, header.dimensions)
-        # bytes_buffer = byte_buffer[4 + 4 * len(header.dimensions):]
-        # fmt = '>' + sign * number_count
-        # matrix = np.asarray(struct.unpack(fmt, bytes_buffer), dtype=dt)
-        # return matrix.reshape(header.dimensions)
         matrix = np.frombuffer(byte_buffer, dtype=dt, offset=offset)
         return matrix.reshape(header.dimensions).newbyteorder('>')
 
