@@ -1,5 +1,8 @@
+import ml
 import struct
 import numpy as np
+from os.path import join
+from math import floor, ceil
 from operator import mul
 from functools import reduce
 from collections import namedtuple
@@ -129,6 +132,38 @@ class IdxEncoder(_IdxManipulator):
         header = self._write_matrix_header(matrix)
         data = self._write_matrix_data(matrix)
         return header + data
+
+
+def load_train_data(path):
+    def classify(num):
+        result = np.zeros(10)
+        result[num] = 255.0
+        return result
+
+    data = decode(join(path, 'train-images.idx3-ubyte'))
+    labels_ = decode(join(path, 'train-labels.idx1-ubyte'))
+    labels = np.asarray([classify(n) for n in labels_])
+    available_data = np.zeros((60000, 28*28+10), dtype=np.float32)
+    available_data[:, :28*28] = data.reshape((60000, 28*28))
+    available_data[:, 28*28:] = labels
+    ml.normalize(available_data, (0.0, 255.0))
+    return available_data
+
+
+def load_test_data(path):
+    def classify(num):
+        result = np.zeros(10)
+        result[num] = 255.0
+        return result
+
+    data = decode(join(path, 't10k-images.idx3-ubyte'))
+    labels_ = decode(join(path, 't10k-labels.idx1-ubyte'))
+    labels = np.asarray([classify(n) for n in labels_])
+    available_data = np.zeros((10000, 28*28+10), dtype=np.float32)
+    available_data[:, :28*28] = data.reshape((10000, 28*28))
+    available_data[:, 28*28:] = labels
+    ml.normalize(available_data, (0.0, 255.0))
+    return available_data
 
 
 def displace(image, dx, dy):
