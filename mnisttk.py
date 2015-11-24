@@ -7,6 +7,8 @@ from operator import mul
 from functools import reduce
 from collections import namedtuple
 
+from scipy.ndimage.filters import gaussian_filter
+
 
 UNSIGNED_BYTE = b'\x08'
 SIGNED_BYTE = b'\x09'
@@ -166,9 +168,30 @@ def load_test_data(path):
     return available_data
 
 
+def interpolate_2d(up_left, up_right, down_left, down_right, dx, dy):
+    up_val = up_left + (up_right - up_left) * dx
+    down_val = down_left + (down_right - down_left) * dx
+    #TODO y orientation test
+    return up_val + (down_val - up_val) * dy
+
+
+def create_distortion_maps(ndim, sigma, alpha):
+    dx, dy = np.random.uniform(-1, 1, ndim), np.random.uniform(-1, 1, ndim)
+    return alpha * gaussian_filter(dx, sigma), alpha * gaussian_filter(dy, sigma)
+
+
 def displace(image, dx, dy):
     inimg = image.reshape((28, 28))
     output = np.zeros(28*28, dtype=np.float32)
     outimg = output.reshape((28, 28))
-
+    for (x, y), _ in np.ndenumerate(image):
+        newx, newy = x + dx[x, y], y + dy[x, y]
+        if 0 <= floor(newx) < 28 and 0 <= ceil(newx) < 28 and 0 <= floor(newy) < 28 and 0 <= ceil(newy) < 28:
+            outimg[x, y] = interpolate_2d(
+                inimg[floor(newx), floor(newy)], inimg[ceil(newx), floor(newy)],
+                inimg[floor(newx), ceil(newy)], inimg[ceil(newx), ceil(newy)],
+                newx - floor(newx), newy - floor(newy)
+            )
+        else:
+            outimg[x, y] = 0
     return output
