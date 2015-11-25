@@ -1,3 +1,5 @@
+import random
+
 import ml
 import struct
 import numpy as np
@@ -133,17 +135,18 @@ class IdxEncoder(_IdxManipulator):
         return header + data
 
 
-def load_train_data(path):
+def load_train_data(path, extended=True):
     def classify(num):
         result = np.zeros(10)
         result[num] = 255.0
         return result
 
-    data = decode(join(path, 'train-images.idx3-ubyte'))
-    labels_ = decode(join(path, 'train-labels.idx1-ubyte'))
+    prefix = 'extended' if extended else 'train'
+    data = decode(join(path, prefix + '-images.idx3-ubyte'))
+    labels_ = decode(join(path, prefix + '-labels.idx1-ubyte'))
     labels = np.asarray([classify(n) for n in labels_])
-    available_data = np.zeros((60000, 28*28+10), dtype=np.float32)
-    available_data[:, :28*28] = data.reshape((60000, 28*28))
+    available_data = np.zeros((len(data), 28*28+10), dtype=np.float32)
+    available_data[:, :28*28] = data.reshape((len(data), 28*28))
     available_data[:, 28*28:] = labels
     ml.normalize(available_data, (0.0, 255.0))
     return available_data
@@ -163,6 +166,33 @@ def load_test_data(path):
     available_data[:, 28*28:] = labels
     ml.normalize(available_data, (0.0, 255.0))
     return available_data
+
+
+def extend_train_data(path, new_sample_count, sigma=2.0, alpha=8.0):
+    data = decode(join(path, 'train-images.idx3-ubyte'))
+    labels = decode(join(path, 'train-labels.idx1-ubyte'))
+    data_shape = data.shape[0] + new_sample_count, data.shape[1], data.shape[2]
+
+    new_data = np.zeros(data_shape, dtype=data.dtype)
+    new_data[:data.shape[0]] = data
+    new_label = np.zeros((labels.shape[0] + new_sample_count, ),
+                         dtype=labels.dtype)
+    new_label[:labels.shape[0]] = labels
+
+    rnd = random.Random()
+    offset, cur = len(data), 0
+    for index in (rnd.randint(0, offset - 1) for _ in range(new_sample_count)):
+        img_vector = np.zeros((28*28), dtype=np.float32)
+        img_vector[:] = data[index].reshape(28*28)
+        ml.normalize(img_vector, (0.0, 255.0))
+        dx, dy = create_distortion_maps((28, 28), sigma, alpha)
+        displaced_img = displace(img_vector, dx, dy)
+        new_data[offset + cur, :, :] = np.round(displaced_img * 255).reshape((28, 28))
+        new_label[offset + cur] = labels[index]
+        cur += 1
+
+    encode(new_data, join(path, 'extended-images.idx3-ubyte'))
+    encode(new_label, join(path, 'extended-labels.idx1-ubyte'))
 
 
 def interpolate_2d(up_left, up_right, down_left, down_right, dx, dy):
