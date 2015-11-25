@@ -123,10 +123,7 @@ class IdxEncoder(_IdxManipulator):
     def _write_matrix_data(self, matrix):
         """Returns matrix data bytes for given matrix.
         """
-        _, sign = self.type_dict[matrix.dtype.type]
-        number_count = reduce(mul, matrix.shape)
-        data_fmt = '>' + sign * number_count
-        return struct.pack(data_fmt, *matrix.reshape(number_count))
+        return matrix.newbyteorder('>').tobytes()
 
     def write(self, matrix):
         """Returns idx encoded version of given matrix in bytes object.
