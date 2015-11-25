@@ -184,7 +184,7 @@ def displace(image, dx, dy):
     inimg = image.reshape((28, 28))
     output = np.zeros(28*28, dtype=np.float32)
     outimg = output.reshape((28, 28))
-    for (x, y), _ in np.ndenumerate(image):
+    for (x, y), _ in np.ndenumerate(inimg):
         newx, newy = x + dx[x, y], y + dy[x, y]
         if 0 <= floor(newx) < 28 and 0 <= ceil(newx) < 28 and 0 <= floor(newy) < 28 and 0 <= ceil(newy) < 28:
             outimg[x, y] = interpolate_2d(
